@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../review/review.dart';
+
 class FileCard extends StatelessWidget {
-  const FileCard({super.key});
+
+  final String fileName;
+
+  const FileCard({super.key, required this.fileName});
 
   @override
   Widget build(BuildContext context) {
@@ -24,16 +29,21 @@ class FileCard extends StatelessWidget {
             ),
             SizedBox(height: 10),
             //file name
-            Text('Review one'),
+            Text(fileName),
             SizedBox(height: 10),
             //Button
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 30),
-              decoration: BoxDecoration(
-                color: Colors.blue,
-                borderRadius: BorderRadius.circular(10),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => Review(fileName: fileName,)));
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 30),
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text("Open"),
               ),
-              child: Text("Open"),
             )
           ],
         ),
