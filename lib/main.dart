@@ -29,7 +29,7 @@ class ImageApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: ChangeNotifierProvider(
         create: (context) => FolderManagerModel(),
-        child: HomePage(),
+        child: Login(),
       ),
     );
   }
