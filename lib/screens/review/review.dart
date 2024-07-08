@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:imageselector/services/google_drive_helper.dart';
+import 'dart:convert';
+import 'dart:html' as html;
 
 class Review extends StatefulWidget {
   final String fileName;
@@ -18,12 +21,52 @@ class Review extends StatefulWidget {
 
 class _ReviewState extends State<Review> {
   List<Uint8List> _images = [];
+  List<String> _imageNames = [];
+  List<String> _imageStatuses = [];
   int currentIndex = 0;
+  List<List<dynamic>> rows = [];
+
 
   @override
   initState() {
     super.initState();
     _fetchImagesFromDrive();
+  }
+
+
+  void _exportToCsv() {
+    List<List<dynamic>> rows = [
+      ['Image Name', 'Status', 'Link', 'Best Quality', 'Isolate Background'],
+    ];
+
+    for (int i = 0; i < _images.length; i++) {
+      // Add a new row for each image
+      rows.add([
+        _imageNames[i], // Image name
+        _imageStatuses[i], // Status
+        'https://drive.google.com/uc?export=view&id=${_imageNames[i]}', // Link
+        _imageStatuses[i] == 'Best Quality' ? 1 : (_imageStatuses[i] == 'Rejected' ? '-' : 0), // Best Quality
+        _imageStatuses[i] == 'Isolate Background' ? 1 : (_imageStatuses[i] == 'Rejected' ? '-' : 0), // Isolate Background
+      ]);
+    }
+
+    String csv = const ListToCsvConverter().convert(rows);
+
+    // Prepare a blob and create an anchor link
+    final blob = html.Blob([csv]);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.document.createElement('a') as html.AnchorElement
+      ..href = url
+      ..style.display = 'none'
+      ..download = 'myCsvFile.csv';
+    html.document.body?.children.add(anchor);
+
+    // Trigger a click event on the anchor link
+    anchor.click();
+
+    // Cleanup
+    html.document.body?.children.remove(anchor);
+    html.Url.revokeObjectUrl(url);
   }
 
   Future<void> _fetchImagesFromDrive() async {
@@ -52,6 +95,8 @@ class _ReviewState extends State<Review> {
           final bytes = Uint8List.fromList(data.expand((i) => i).toList());
           setState(() {
             _images.add(bytes);
+            _imageNames.add(file.id!);
+            _imageStatuses.add('Status');
           });
         }
       }
@@ -102,65 +147,79 @@ class _ReviewState extends State<Review> {
     }
   }
 
-
   void _showReviewSheet() {
     if (currentIndex < _images.length) {
       showDialog(
         context: context,
         builder: (context) {
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
+          return Dialog(
+            child: Stack(
               children: [
-                Image.memory(_images[currentIndex], width: 200, height: 200,),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      child: Text('Reject'),
-                      onPressed: () {
-                        currentIndex++;
-                        Navigator.pop(context);
-                        _showReviewSheet();
-                      },
-                    ),
-                    ElevatedButton(
-                      child: Text('Approve'),
-                      onPressed: () {
-                        Navigator.pop(context); // Pop the current dialog
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ElevatedButton(
-                                    child: Text('Best Quality'),
-                                    onPressed: () {
-                                      // Handle Best Quality
-                                      currentIndex++;
-                                      Navigator.pop(context);
-                                      _showReviewSheet();
-                                    },
+                Image.memory(
+                  _images[currentIndex],
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height,
+                  fit: BoxFit.cover,
+                ),
+                Positioned(
+                  bottom: 0,
+                  child: Container(
+                    width: MediaQuery.of(context).size.width,
+                    color: Colors.black.withOpacity(0.7),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton(
+                          child: Text('Reject'),
+                          onPressed: () {
+                            _imageStatuses[currentIndex] = 'Rejected'; // Update the status
+                            currentIndex++;
+                            Navigator.pop(context);
+                            _showReviewSheet();
+                          },
+                        ),
+                        ElevatedButton(
+                          child: Text('Approve'),
+                          onPressed: () {
+                            _imageStatuses[currentIndex] = 'Approved'; // Update the status
+                            Navigator.pop(context); // Pop the current dialog
+                            showDialog(
+                              context: context,
+                              builder: (context) {
+                                return AlertDialog(
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ElevatedButton(
+                                        child: Text('Best Quality'),
+                                        onPressed: () {
+                                          // Handle Best Quality
+                                          _imageStatuses[currentIndex] = 'Best Quality';
+                                          currentIndex++;
+                                          Navigator.pop(context);
+                                          _showReviewSheet();
+                                        },
+                                      ),
+                                      ElevatedButton(
+                                        child: Text('Isolate Background'),
+                                        onPressed: () {
+                                          // Handle Isolate Background
+                                          _imageStatuses[currentIndex] = 'Isolate Background';
+                                          currentIndex++;
+                                          Navigator.pop(context);
+                                          _showReviewSheet();
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                  ElevatedButton(
-                                    child: Text('Isolate Background'),
-                                    onPressed: () {
-                                      // Handle Isolate Background
-                                      currentIndex++;
-                                      Navigator.pop(context);
-                                      _showReviewSheet();
-                                    },
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             );
                           },
-                        );
-                      },
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -214,13 +273,23 @@ class _ReviewState extends State<Review> {
                     value: 2,
                     child: Text("Option 2"),
                   ),
-                  // add more items here
+                  PopupMenuItem(
+                    value: 3,
+                    child: Text("Download CSV"),
+                  ),
                 ],
               ).then((value) {
                 // handle the value returned from the menu
                 if (value != null) {
                   print('User selected: $value');
+                  if (value == 3) {
+                    try {
+                      _exportToCsv();
+                    } catch (error) {
+                      print("Error exporting to CSV: $error");
+                  }
                 }
+                  }
               });
             },
           ),
