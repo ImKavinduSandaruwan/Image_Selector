@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:imageselector/services/google_drive_helper.dart';
-import 'dart:convert';
 import 'dart:html' as html;
 
 class Review extends StatefulWidget {
@@ -30,13 +30,12 @@ class _ReviewState extends State<Review> {
   @override
   initState() {
     super.initState();
-    _fetchImagesFromDrive();
+    _loadImageStatuses().then((_) => _fetchImagesFromDrive());
   }
-
 
   void _exportToCsv() {
     List<List<dynamic>> rows = [
-      ['Image Name', 'Status', 'Link', 'Best Quality', 'Isolate Background'],
+      ['Image Name', 'Status', 'Link', 'Best Quality', 'Isolate Background', 'Leader Choice'],
     ];
 
     for (int i = 0; i < _images.length; i++) {
@@ -47,6 +46,7 @@ class _ReviewState extends State<Review> {
         'https://drive.google.com/uc?export=view&id=${_imageNames[i]}', // Link
         _imageStatuses[i] == 'Best Quality' ? 1 : (_imageStatuses[i] == 'Rejected' ? '-' : 0), // Best Quality
         _imageStatuses[i] == 'Isolate Background' ? 1 : (_imageStatuses[i] == 'Rejected' ? '-' : 0), // Isolate Background
+        'No Records', // Leader Choice
       ]);
     }
 
@@ -96,7 +96,7 @@ class _ReviewState extends State<Review> {
           setState(() {
             _images.add(bytes);
             _imageNames.add(file.id!);
-            _imageStatuses.add('Status');
+            _imageStatuses.add('Pending'); // Default status
           });
         }
       }
@@ -147,6 +147,24 @@ class _ReviewState extends State<Review> {
     }
   }
 
+  Future<void> _saveImageStatuses() async {
+    final box = await Hive.openBox('imageStatuses');
+    await box.put('statuses', _imageStatuses);
+    await box.put('currentIndex', currentIndex);
+  }
+
+  Future<void> _loadImageStatuses() async {
+    final box = await Hive.openBox('imageStatuses');
+    final loadedStatuses = box.get('statuses');
+    final loadedIndex = box.get('currentIndex');
+    if (loadedStatuses != null) {
+      setState(() {
+        _imageStatuses = List<String>.from(loadedStatuses);
+        currentIndex = loadedIndex ?? 0;
+      });
+    }
+  }
+
   void _showReviewSheet() {
     if (currentIndex < _images.length) {
       showDialog(
@@ -172,7 +190,10 @@ class _ReviewState extends State<Review> {
                         ElevatedButton(
                           child: Text('Reject'),
                           onPressed: () {
-                            _imageStatuses[currentIndex] = 'Rejected'; // Update the status
+                            setState(() {
+                              _imageStatuses[currentIndex] = 'Rejected'; // Update the status
+                            });
+                            _saveImageStatuses(); // Save the updated statuses
                             currentIndex++;
                             Navigator.pop(context);
                             _showReviewSheet();
@@ -181,7 +202,9 @@ class _ReviewState extends State<Review> {
                         ElevatedButton(
                           child: Text('Approve'),
                           onPressed: () {
-                            _imageStatuses[currentIndex] = 'Approved'; // Update the status
+                            setState(() {
+                              _imageStatuses[currentIndex] = 'Approved'; // Update the status
+                            });
                             Navigator.pop(context); // Pop the current dialog
                             showDialog(
                               context: context,
@@ -193,8 +216,10 @@ class _ReviewState extends State<Review> {
                                       ElevatedButton(
                                         child: Text('Best Quality'),
                                         onPressed: () {
-                                          // Handle Best Quality
-                                          _imageStatuses[currentIndex] = 'Best Quality';
+                                          setState(() {
+                                            // Handle Best Quality
+                                            _imageStatuses[currentIndex] = 'Best Quality';
+                                          });
                                           currentIndex++;
                                           Navigator.pop(context);
                                           _showReviewSheet();
@@ -203,8 +228,10 @@ class _ReviewState extends State<Review> {
                                       ElevatedButton(
                                         child: Text('Isolate Background'),
                                         onPressed: () {
-                                          // Handle Isolate Background
-                                          _imageStatuses[currentIndex] = 'Isolate Background';
+                                          setState(() {
+                                            // Handle Isolate Background
+                                            _imageStatuses[currentIndex] = 'Isolate Background';
+                                          });
                                           currentIndex++;
                                           Navigator.pop(context);
                                           _showReviewSheet();
@@ -287,9 +314,9 @@ class _ReviewState extends State<Review> {
                       _exportToCsv();
                     } catch (error) {
                       print("Error exporting to CSV: $error");
+                    }
                   }
                 }
-                  }
               });
             },
           ),
@@ -391,6 +418,25 @@ class _ReviewState extends State<Review> {
                         ),
                       ),
                     ),
+                    SizedBox(width: 20),
+                    //leaders choice
+                    GestureDetector(
+                      onTap: (){},
+                      child: Container(
+                        height: 50,
+                        width: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Leader\'s Choice',
+                            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    )
                   ],
                 )
               ],
@@ -406,7 +452,27 @@ class _ReviewState extends State<Review> {
               ),
               itemCount: _images.length,
               itemBuilder: (context, index) {
-                return Image.memory(_images[index], fit: BoxFit.cover);
+                Color borderColor;
+
+                switch (_imageStatuses[index]) {
+                  case 'Rejected':
+                    borderColor = Colors.red;
+                    break;
+                  case 'Approved':
+                  case 'Best Quality':
+                  case 'Isolate Background':
+                    borderColor = Colors.green;
+                    break;
+                  default:
+                    borderColor = Colors.grey; // Default border color for pending status
+                }
+
+                return Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: borderColor, width: 2.0),
+                  ),
+                  child: Image.memory(_images[index], fit: BoxFit.cover),
+                );
               },
             ),
           ),
