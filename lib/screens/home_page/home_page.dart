@@ -46,11 +46,26 @@ class HomePage extends StatelessWidget {
               final parentFolder = await driveApi.files.create(parentFolderToCreate);
               parentFolderId = parentFolder.id;
               print('Created parent folder: ${parentFolder.id}');
+
+              // // Create a permission to make the file readable by anyone
+              // final permission = drive.Permission()
+              //   ..type = 'anyone'
+              //   ..role = 'reader';
             }
+
+            // Fetch the child folders in the parent folder
+            final childFolderList = await driveApi.files.list(q: "'$parentFolderId' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false");
+            final existingFolderNames = childFolderList.files!.map((file) => file.name!).toSet();
+
+            // Generate a unique folder name
+            String childFolderName;
+            do {
+              childFolderName = "Review ${Random().nextInt(100)}";
+            } while (existingFolderNames.contains(childFolderName));
 
             // Create child folder
             final childFolderToCreate = drive.File()
-              ..name = "Review ${Random().nextInt(100)}"
+              ..name = childFolderName
               ..mimeType = "application/vnd.google-apps.folder";
 
             if (parentFolderId != null) {
@@ -60,7 +75,8 @@ class HomePage extends StatelessWidget {
             final childFolder = await driveApi.files.create(childFolderToCreate);
             print('Created child folder: ${childFolder.id} under parent folder: ${parentFolderId}');
 
-            folderModel.addFolder(childFolder.name!);
+            // Add the new folder to the FolderManagerModel
+            Provider.of<FolderManagerModel>(context, listen: false).addFolder(childFolderName);
           }
         },
         child: const Icon(Icons.add),

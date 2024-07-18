@@ -1,5 +1,4 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:imageselector/screens/login/app_textfield.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +26,7 @@ class Login extends StatelessWidget {
           )
       ));
     }catch(e){
-      print('>>>>>>>>>>>>' + e.toString());
+      print('>>>>>>>>>>>>$e');
     }
   }
 
